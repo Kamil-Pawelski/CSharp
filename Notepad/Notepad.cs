@@ -1,211 +1,115 @@
-﻿namespace Notepad;
+﻿using Notepad.Files;
+
+namespace Notepad;
 
 internal sealed class Notepad
 {
-    private string Content { get; set; } = string.Empty;
-    private string FilePath { get; set; } = string.Empty;
-    private readonly Dictionary<string, TextAction> _textAction = [];
-    private readonly Dictionary<string, TextStatAction> _statAction = [];
+    private readonly IFiles _fileHandler = new TxtFile();
+
+    private readonly Dictionary<string, Func<string>> _textActions;
+    private readonly Dictionary<string, Func<int>> _statActions;
 
     public Notepad()
     {
-        _textAction.Add("Add Text", AddText);
-        _textAction.Add("Remove Text", RemoveText);
-        _textAction.Add("Replace Text", ReplaceText);
+        _textActions = new()
+        {
+            { "Add Text", AddText },
+            { "Remove Text", RemoveText },
+            { "Replace Text", ReplaceText }
+        };
 
-        _statAction.Add("Count Words", CountWords);
-        _statAction.Add("Count Lines", CountLines);
-        _statAction.Add("Count Characters", CountCharacters);
+        _statActions = new()
+        {
+            { "Count Words", CountWords },
+            { "Count Lines", CountLines },
+            { "Count Characters", CountCharacters }
+        };
     }
 
     public void CreateFile()
     {
-        Console.WriteLine("Enter file name:");
-        string fileName = Console.ReadLine() ?? string.Empty;
-
-        if (string.IsNullOrEmpty(fileName))
-        {
-            Console.WriteLine("File name cannot be empty.");
-            return;
-        }
-
-        FilePath = Path.Combine(Environment.CurrentDirectory, fileName);
-
-        if (File.Exists(FilePath))
-        {
-            Console.WriteLine("File already exists.");
-            return;
-        }
-
-        using var fileStream = File.Create(FilePath);
-        Console.WriteLine($"File {fileName} created.");
+        string name = Prompt("Enter file name:");
+        _fileHandler.CreateFile(name);
     }
 
     public void OpenFile()
     {
-        Console.WriteLine("Enter file name:");
-        string fileName = Console.ReadLine() ?? string.Empty;
-        if (string.IsNullOrEmpty(fileName))
-        {
-            Console.WriteLine("File name cannot be empty.");
-            return;
-        }
-
-        FilePath = Path.Combine(Environment.CurrentDirectory, fileName);
-
-        if (!File.Exists(FilePath))
-        {
-            Console.WriteLine("File does not exist.");
-            return;
-        }
-
-        Content = File.ReadAllText(FilePath);
-        Console.WriteLine($"File {fileName} opened.");
+        string name = Prompt("Enter file name:");
+        _fileHandler.OpenFile(name);
     }
 
     public void SaveFile()
     {
-        if (string.IsNullOrEmpty(FilePath))
-        {
-            Console.WriteLine("No file is open.");
-            return;
-        }
-        File.WriteAllText(FilePath, Content);
-        Console.WriteLine($"File {FilePath} saved.");
-    }
-
-    public void ShowContent()
-    {
-        if (string.IsNullOrEmpty(Content))
-        {
-            Console.WriteLine("No content to display.");
-            return;
-        }
-        Console.WriteLine($"Content of {FilePath}:\n{Content}");
+        _fileHandler.SaveFile();
     }
 
     public void DeleteFile()
     {
-        Console.WriteLine("Enter file name:");
-        string fileName = Console.ReadLine() ?? string.Empty;
-        if (string.IsNullOrEmpty(fileName))
-        {
-            Console.WriteLine("File name cannot be empty.");
-            return;
-        }
-        FilePath = Path.Combine(Environment.CurrentDirectory, fileName);
-        if (!File.Exists(FilePath))
-        {
-            Console.WriteLine("File does not exist.");
-            return;
-        }
-        File.Delete(FilePath);
-        Console.WriteLine($"File {fileName} deleted.");
+        string name = Prompt("Enter file name:");
+        _fileHandler.DeleteFile(name);
+    }
+
+    public void ShowContent()
+    {
+        _fileHandler.ShowContent();
     }
 
     public void DoTextAction(string actionName)
     {
-        if (_textAction.ContainsKey(actionName))
+        if (_textActions.TryGetValue(actionName, out var action))
         {
-            Content = _textAction[actionName]();
-            Console.WriteLine($"Text action {actionName} performed.");
+            _fileHandler.SetContent(action());
+            Console.WriteLine($"Text action '{actionName}' performed.");
         }
         else
         {
-            Console.WriteLine($"Text action {actionName} not found.");
+            Console.WriteLine($"Unknown text action: '{actionName}'.");
         }
     }
 
     public void DoStatAction(string actionName)
     {
-        if (_statAction.ContainsKey(actionName))
+        if (_statActions.TryGetValue(actionName, out var action))
         {
-            int result = _statAction[actionName]();
-            Console.WriteLine($"Stat action {actionName} performed. Result: {result}");
+            int result = action();
+            Console.WriteLine($"Stat action '{actionName}' result: {result}");
         }
         else
         {
-            Console.WriteLine($"Stat action {actionName} not found.");
+            Console.WriteLine($"Unknown stat action: '{actionName}'.");
         }
     }
 
     private string AddText()
     {
-        Console.WriteLine("Enter text to add:");
-        string text = Console.ReadLine() ?? string.Empty;
-        if (string.IsNullOrEmpty(text))
-        {
-            Console.WriteLine("Text to add cannot be empty.");
-            return Content;
-        }
-        return Content + text;
+        string text = Prompt("Enter text to add:");
+        return _fileHandler.GetContent() + text;
     }
 
     private string RemoveText()
     {
-        Console.WriteLine("Enter text to remove:");
-        string text = Console.ReadLine() ?? string.Empty;
-
-        if (string.IsNullOrEmpty(text))
-        {
-            Console.WriteLine("Text to remove cannot be empty.");
-            return Content;
-        }
-
-        return Content.Replace(text, string.Empty);
+        string text = Prompt("Enter text to remove:");
+        return _fileHandler.GetContent().Replace(text, string.Empty);
     }
 
     private string ReplaceText()
     {
-        Console.WriteLine("Enter text to replace:");
-
-        string oldText = Console.ReadLine() ?? string.Empty;
-
-        if (string.IsNullOrEmpty(oldText))
-        {
-            Console.WriteLine("Text to replace cannot be empty.");
-            return Content;
-        }
-
-        Console.WriteLine("Enter new text:");
-
-        string newText = Console.ReadLine() ?? string.Empty;
-
-        if (string.IsNullOrEmpty(newText))
-        {
-            Console.WriteLine("New text cannot be empty.");
-            return Content;
-        }
-        return Content.Replace(oldText, newText);
+        string oldText = Prompt("Enter text to replace:");
+        string newText = Prompt("Enter new text:");
+        return _fileHandler.GetContent().Replace(oldText, newText);
     }
 
-    private int CountWords()
-    {
-        if (string.IsNullOrEmpty(Content))
-        {
-            Console.WriteLine("No content to count words.");
-            return 0;
-        }
-        return Content.Split([' ', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
-    }
+    private int CountWords() =>
+        _fileHandler.GetContent().Split(new[] { ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
 
-    private int CountLines()
-    {
-        if (string.IsNullOrEmpty(Content))
-        {
-            Console.WriteLine("No content to count lines.");
-            return 0;
-        }
-        return Content.Split('\n').Length;
-    }
+    private int CountLines() =>
+        _fileHandler.GetContent().Split(new[] { '\n' }, StringSplitOptions.None).Length;
 
-    private int CountCharacters()
+    private int CountCharacters() => _fileHandler.GetContent().Length;
+
+    private string Prompt(string message)
     {
-        if (string.IsNullOrEmpty(Content))
-        {
-            Console.WriteLine("No content to count characters.");
-            return 0;
-        }
-        return Content.Length;
+        Console.WriteLine(message);
+        return Console.ReadLine()?.Trim() ?? string.Empty;
     }
 }
